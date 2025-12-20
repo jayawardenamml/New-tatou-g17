@@ -1,5 +1,6 @@
 import pytest
 import sys
+import os
 from pathlib import Path
 
 # Add src directory to Python path
@@ -9,13 +10,25 @@ from server import create_app
 
 @pytest.fixture(scope="session")
 def app():
-    """Create test app with test configuration"""
+    """Create test app with test configuration and TEST_MODE enabled.
+    
+    This fixture enables the mock database and mock watermarking methods
+    by setting the TEST_MODE environment variable, providing isolated
+    unit testing without external database dependencies.
+    """
+    # Enable TEST_MODE for mock database and watermarking
+    os.environ["TEST_MODE"] = "true"
+    
     app = create_app()
     app.config.update({
         "TESTING": True,
         "SECRET_KEY": "test-secret-key",
+        "TEST_MODE": True,  # Explicitly set for clarity
     })
     yield app
+    
+    # Cleanup
+    os.environ.pop("TEST_MODE", None)
 
 @pytest.fixture
 def client(app):

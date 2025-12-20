@@ -23,6 +23,14 @@ import time
 from rmap.identity_manager import IdentityManager
 from rmap.rmap import RMAP
 
+# Import mock watermarking for TEST_MODE
+try:
+    import mock_watermarking as MockWM
+    _MOCK_WM_AVAILABLE = True
+except ImportError:
+    _MOCK_WM_AVAILABLE = False
+    MockWM = None  # type: ignore
+
 # --- Security Logging Setup ---
 import logging
 import json as _json
@@ -147,8 +155,15 @@ def create_app():
 
     app.config["STORAGE_DIR"].mkdir(parents=True, exist_ok=True)
 
+    # --- TEST_MODE Configuration ---
+    # When TEST_MODE is set, use an in-memory SQLite database instead of production MariaDB
+    app.config["TEST_MODE"] = os.environ.get("TEST_MODE", "").lower() in ("true", "1", "yes")
+
     # --- DB engine only (no Table metadata) ---
     def db_url() -> str:
+        # Use SQLite in-memory database when in test mode
+        if app.config["TEST_MODE"]:
+            return "sqlite:///:memory:"
         return (
             f"mysql+pymysql://{app.config['DB_USER']}:{app.config['DB_PASSWORD']}"
             f"@{app.config['DB_HOST']}:{app.config['DB_PORT']}/{app.config['DB_NAME']}?charset=utf8mb4"
@@ -157,9 +172,60 @@ def create_app():
     def get_engine():
         eng = app.config.get("_ENGINE")
         if eng is None:
-            eng = create_engine(db_url(), pool_pre_ping=True, future=True)
-            app.config["_ENGINE"] = eng
+            if app.config["TEST_MODE"]:
+                # Create in-memory SQLite engine for testing
+                eng = create_engine(db_url(), future=True, echo=False)
+                app.config["_ENGINE"] = eng
+                # Initialize mock database schema
+                _init_mock_database(eng)
+            else:
+                eng = create_engine(db_url(), pool_pre_ping=True, future=True)
+                app.config["_ENGINE"] = eng
         return eng
+
+    def _init_mock_database(engine):
+        """Initialize the mock SQLite database schema for unit tests.
+        
+        This creates a lightweight, in-memory schema compatible with the production
+        database structure, enabling deterministic and isolated unit testing.
+        """
+        with engine.begin() as conn:
+            # Users table
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS Users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email VARCHAR(320) NOT NULL UNIQUE,
+                    hpassword VARCHAR(255) NOT NULL,
+                    login VARCHAR(64) NOT NULL
+                )
+            """))
+            
+            # Documents table
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS Documents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(255) NOT NULL,
+                    path VARCHAR(512) NOT NULL,
+                    sha256 VARCHAR(64),
+                    ownerid INTEGER NOT NULL,
+                    FOREIGN KEY (ownerid) REFERENCES Users(id)
+                )
+            """))
+            
+            # Versions table (for watermarked documents)
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS Versions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    documentid INTEGER NOT NULL,
+                    link VARCHAR(64),
+                    intended_for VARCHAR(320),
+                    secret TEXT,
+                    method VARCHAR(64),
+                    position VARCHAR(64),
+                    path VARCHAR(512),
+                    FOREIGN KEY (documentid) REFERENCES Documents(id)
+                )
+            """))
 
     # --- Helpers ---
     def _serializer():
@@ -780,11 +846,19 @@ def create_app():
         # check watermark applicability
         try:
             app.logger.debug(f"Checking watermark applicability: method={method}, position={position}")
-            applicable = WMUtils.is_watermarking_applicable(
-                method=method,
-                pdf=str(file_path),
-                position=position
-            )
+            # Use mock watermarking in TEST_MODE
+            if app.config["TEST_MODE"] and _MOCK_WM_AVAILABLE:
+                applicable = MockWM.is_mock_watermarking_applicable(
+                    method=method,
+                    pdf=str(file_path),
+                    position=position
+                )
+            else:
+                applicable = WMUtils.is_watermarking_applicable(
+                    method=method,
+                    pdf=str(file_path),
+                    position=position
+                )
             if applicable is False:
                 app.logger.warning(f"Watermarking not applicable: method={method}, doc_id={doc_id}")
                 return jsonify({"error": "watermarking method not applicable"}), 400
@@ -795,14 +869,27 @@ def create_app():
         # apply watermark → bytes
         try:
             app.logger.debug(f"Applying watermark: method={method}, secret_len={len(secret)}, key_len={len(key)}")
-            wm_bytes: bytes = WMUtils.apply_watermark(
-                pdf=str(file_path),
-                secret=secret,
-                key=key,
-                method=method,
-                position=position
-            )
+            # Use mock watermarking in TEST_MODE
+            if app.config["TEST_MODE"] and _MOCK_WM_AVAILABLE:
+                wm_bytes: bytes = MockWM.apply_mock_watermark(
+                    pdf=str(file_path),
+                    secret=secret,
+                    key=key,
+                    method=method,
+                    position=position
+                )
+            else:
+                wm_bytes: bytes = WMUtils.apply_watermark(
+                    pdf=str(file_path),
+                    secret=secret,
+                    key=key,
+                    method=method,
+                    position=position
+                )
             if not isinstance(wm_bytes, (bytes, bytearray)) or len(wm_bytes) == 0:
+                # Branch coverage note: The isinstance check for non-bytes return is defensive.
+                # It cannot be fully tested in unit tests as the mock returns bytes,
+                # but protects against malformed watermarking implementations.
                 app.logger.error(f"Watermarking produced no output for doc_id={doc_id}")
                 return jsonify({"error": "watermarking produced no output"}), 500
             app.logger.debug(f"Watermark applied successfully: size={len(wm_bytes)} bytes")
@@ -977,11 +1064,19 @@ def create_app():
         app.logger.debug(f"Reading watermark from: {file_path}")
         secret = None
         try:
-            secret = WMUtils.read_watermark(
-                method=method,
-                pdf=str(file_path),
-                key=key
-            )
+            # Use mock watermarking in TEST_MODE
+            if app.config["TEST_MODE"] and _MOCK_WM_AVAILABLE:
+                secret = MockWM.read_mock_watermark(
+                    method=method,
+                    pdf=str(file_path),
+                    key=key
+                )
+            else:
+                secret = WMUtils.read_watermark(
+                    method=method,
+                    pdf=str(file_path),
+                    key=key
+                )
             app.logger.info(
                 f"Watermark read successfully: doc_id={doc_id}, method={method}, secret_len={len(secret) if secret else 0}")
         except Exception as e:
