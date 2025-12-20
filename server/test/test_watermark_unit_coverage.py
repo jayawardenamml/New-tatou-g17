@@ -142,8 +142,9 @@ class TestCreateWatermarkBranchCoverage:
         - Invalid document_id validation
         """
         response = client.post(
-            '/api/create-watermark/invalid_id',
+            '/api/create-watermark',
             json={
+                'id': 'invalid_id',  # Use JSON body instead of path
                 'method': 'whitespace-stego',
                 'secret': 'test',
                 'key': 'test',
@@ -466,8 +467,9 @@ class TestReadWatermarkBranchCoverage:
         - ValueError in document_id validation
         """
         response = client.post(
-            '/api/read-watermark/not_a_number',
+            '/api/read-watermark',
             json={
+                'id': 'not_a_number',  # Use JSON body instead of path
                 'method': 'whitespace-stego',
                 'key': 'test-key'
             },

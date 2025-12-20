@@ -20,8 +20,17 @@ except Exception:  # dill is optional
 import watermarking_utils as WMUtils
 from watermarking_method import WatermarkingMethod
 import time
-from rmap.identity_manager import IdentityManager
-from rmap.rmap import RMAP
+
+# Import RMAP components (optional for TEST_MODE)
+try:
+    from rmap.identity_manager import IdentityManager
+    from rmap.rmap import RMAP
+    _RMAP_AVAILABLE = True
+except ImportError:
+    # RMAP not available (e.g., in test mode with Python 3.13+)
+    _RMAP_AVAILABLE = False
+    IdentityManager = None  # type: ignore
+    RMAP = None  # type: ignore
 
 # Import mock watermarking for TEST_MODE
 try:
@@ -1106,23 +1115,27 @@ def create_app():
 
     app.logger.info(f"RMAP configuration: keys_dir={rmap_keys_dir}, base_pdf={app.config['RMAP_BASE_PDF']}")
 
-    # Initialize RMAP
-    missing = [p for p in (clients_dir, server_pub, server_priv) if not p.exists()]
-    if missing:
-        app.logger.error("RMAP key path(s) missing: %s", ", ".join(map(str, missing)))
+    # Initialize RMAP (skip in TEST_MODE if RMAP not available)
+    if not _RMAP_AVAILABLE:
+        app.logger.info("RMAP not available (e.g., TEST_MODE with incompatible Python version)")
         app.config["RMAP"] = None
     else:
-        try:
-            im = IdentityManager(
-                client_keys_dir=clients_dir,
-                server_public_key_path=server_pub,
-                server_private_key_path=server_priv,
-            )
-            app.config["RMAP"] = RMAP(im)
-            app.logger.info("RMAP initialized successfully (clients dir: %s)", clients_dir)
-        except Exception as e:
-            app.logger.exception("Failed to initialize RMAP: %s", e)
+        missing = [p for p in (clients_dir, server_pub, server_priv) if not p.exists()]
+        if missing:
+            app.logger.error("RMAP key path(s) missing: %s", ", ".join(map(str, missing)))
             app.config["RMAP"] = None
+        else:
+            try:
+                im = IdentityManager(
+                    client_keys_dir=clients_dir,
+                    server_public_key_path=server_pub,
+                    server_private_key_path=server_priv,
+                )
+                app.config["RMAP"] = RMAP(im)
+                app.logger.info("RMAP initialized successfully (clients dir: %s)", clients_dir)
+            except Exception as e:
+                app.logger.exception("Failed to initialize RMAP: %s", e)
+                app.config["RMAP"] = None
 
     def init_rmap_base_pdf():
         """Ensure RMAP base PDF exists in the database."""
