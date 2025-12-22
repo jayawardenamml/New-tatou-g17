@@ -8,7 +8,7 @@ from flask import Flask, jsonify, request, g, send_file, url_for, abort
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, event
 from sqlalchemy.exc import IntegrityError
 import pickle as _std_pickle
 
@@ -184,6 +184,18 @@ def create_app():
             if app.config["TEST_MODE"]:
                 # Create in-memory SQLite engine for testing
                 eng = create_engine(db_url(), future=True, echo=False)
+
+                @event.listens_for(eng, "connect")
+                def _set_sqlite_compat(dbapi_conn, _conn_record):
+                    # MySQL compatibility helpers for TEST_MODE
+                    dbapi_conn.create_function("HEX", 1, lambda b: b.hex() if b is not None else None)
+                    dbapi_conn.create_function("UNHEX", 1, lambda s: bytes.fromhex(s) if s else None)
+                    dbapi_conn.create_function(
+                        "LAST_INSERT_ID",
+                        0,
+                        lambda: dbapi_conn.execute("SELECT last_insert_rowid()").fetchone()[0],
+                    )
+
                 app.config["_ENGINE"] = eng
                 # Initialize mock database schema
                 _init_mock_database(eng)
@@ -215,7 +227,9 @@ def create_app():
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name VARCHAR(255) NOT NULL,
                     path VARCHAR(512) NOT NULL,
-                    sha256 VARCHAR(64),
+                    creation DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    sha256 BLOB,
+                    size INTEGER DEFAULT 0,
                     ownerid INTEGER NOT NULL,
                     FOREIGN KEY (ownerid) REFERENCES Users(id)
                 )
@@ -1139,6 +1153,10 @@ def create_app():
 
     def init_rmap_base_pdf():
         """Ensure RMAP base PDF exists in the database."""
+        if app.config.get("TEST_MODE"):
+            app.logger.info("Skipping RMAP base PDF initialization in TEST_MODE")
+            return
+
         base_pdf_path = Path(app.config["RMAP_BASE_PDF"])
         app.logger.info(f"Initializing RMAP base PDF: {base_pdf_path}")
 
