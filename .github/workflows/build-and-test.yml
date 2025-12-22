@@ -32,24 +32,25 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
-      - name: Run tests with coverage
+      - name: Run watermark unit coverage tests (TEST_MODE)
         working-directory: server
         env:
-          # Enable TEST_MODE to use mock database and watermarking
           TEST_MODE: "true"
           TESTING: "true"
           FLAG_2: ${{ secrets.FLAG_2 }}
         run: |
           . .venv/bin/activate
-          
+
           python -m pytest \
-            --verbose \
+            test/test_watermark_unit_coverage.py \
+            --cov=src \
+            --cov-branch \
+            --cov-report=html:test-results/coverage \
+            --cov-report=term \
             --junit-xml=test-results/junit.xml \
             --html=test-results/report.html \
             --self-contained-html \
-            --cov=src \
-            --cov-report=html:test-results/coverage \
-            --cov-report=term
+            -v
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
