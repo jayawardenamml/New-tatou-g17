@@ -195,5 +195,5 @@ jobs:
           context: ./server
           push: true
           tags: |
-            erangis/group17:latest
-            erangis/group17:${{ github.sha }}
+            std5225/new-tatou-g17:latest
+            std5225/new-tatou-g17:${{ github.sha }}
