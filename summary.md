@@ -1,8 +1,10 @@
-# SOFTSEC VT 2025 Supplementary Assignment 1 - Summary
+SOFTSEC VT 2025 Supplementary Assignment
 
-## Student Information
+## My github Information
 - **Repository**: https://github.com/era9739/tatou-g17
+
 - **Feature Branch**: `feature/supplementary-assignment-unit-tests`
+
 - **Base Commit**: 44d8ab5 (update mutation action)
 
 ## Repository Link
@@ -23,8 +25,8 @@ The HTML coverage report will be generated in `server/htmlcov/index.html`.
 
 ## Pull Request Link
 
-**Pull Request**: [To be created - demonstrating GitHub Actions workflow]
-- URL: Will be added after creating PR from feature branch to main
+**Pull Request**: 
+https://github.com/jayawardenamml/New-tatou-g17/pull/1
 
 ## Implementation Summary
 
@@ -106,7 +108,7 @@ Created 27 comprehensive tests covering both endpoints:
 
 **Uncovered Branches** (documented in code):
 
-1. **server.py line 895**: isinstance check for non-bytes return
+1. **server.py line 895**: is instance check for non-bytes return
    - **Reason**: Python's type system prevents this at runtime with proper mock implementation
    - **Comment added**: Documents this is defensive programming for malformed implementations
    - **Cannot be tested**: Mock correctly returns bytes; forcing wrong type breaks Python semantics
@@ -155,40 +157,37 @@ Current branch coverage for watermarking endpoints:
 - **mock_watermarking.py**: 43% coverage (mock functionality)
 
 The tests achieve comprehensive branch coverage for:
-- ✅ Valid input paths
-- ✅ Missing required fields
-- ✅ Invalid field types
-- ✅ Database errors (document not found)
-- ✅ Authorization checks (ownership validation)
-- ✅ Watermarking applicability checks
-- ✅ Watermarking process exceptions
-- ✅ Empty output detection
-- ✅ Authentication requirements
+- Valid input paths
+- Missing required fields
+- Invalid field types
+- Database errors (document not found)
+- Authorization checks (ownership validation)
+- Watermarking applicability checks
+- Watermarking process exceptions
+- Empty output detection
+- Authentication requirements
 
 ## GitHub Actions Workflow
 
 The existing workflow in `.github/workflows/build-and-test.yml`:
-- ✅ Runs on pull requests to main branch (line 6)
-- ✅ Sets up test environment with dependencies
-- ✅ Executes full test suite including new unit tests
-- ✅ Generates and uploads coverage reports
-- ✅ Comments coverage results on PRs
+- Runs on pull requests to main branch (line 6)
+- Sets up test environment with dependencies
+- Executes full test suite including new unit tests
+- Generates and uploads coverage reports
+- Comments coverage results on PRs
 
-**Note**: The workflow will automatically run when the pull request is created from the feature branch.
+The workflow will automatically run when the pull request is created from the feature branch.
 
 ## Additional Explanations
 
-### Design Decisions
 
 1. **SQLite for Mock Database**: Chosen for its simplicity and in-memory capabilities, providing fast, isolated tests without external dependencies.
 
 2. **Environment Variable Control**: Mock behaviors are controlled via environment variables, allowing tests to trigger specific failure scenarios without modifying mock code.
 
-3. **Optional RMAP Import**: Made RMAP imports optional to support Python 3.13+ where the `imghdr` module was removed, ensuring tests can run in modern Python environments.
+3. **Comprehensive Test Documentation**: Each test includes detailed docstrings explaining what branches it exercises, making the test suite self-documenting.
 
-4. **Comprehensive Test Documentation**: Each test includes detailed docstrings explaining what branches it exercises, making the test suite self-documenting.
-
-### Testing Philosophy
+### Testing process
 
 The test suite follows these principles:
 - **Isolation**: Each test is independent and uses fresh database state
@@ -196,24 +195,5 @@ The test suite follows these principles:
 - **Completeness**: Tests cover both success and failure paths
 - **Clarity**: Test names and documentation clearly indicate purpose
 
-### Limitations and Future Work
 
-1. **Path safety checks**: Some defensive branches (like path traversal checks) are difficult to test without complex file system mocking.
 
-2. **Database transaction errors**: Some error scenarios (like database connection failures) require more complex mock setup.
-
-3. **File I/O errors**: Write permission errors and disk space issues are not comprehensively tested.
-
-These limitations are documented in code comments where applicable.
-
-## Conclusion
-
-This implementation fulfills all requirements of the supplementary assignment:
-- ✅ Individual GitHub repository with clear branch workflow
-- ✅ Feature branch created from final project commit
-- ✅ Mock database with TEST_MODE environment variable
-- ✅ Mock watermarking methods with controllable behaviors
-- ✅ Comprehensive unit tests achieving thorough branch coverage
-- ✅ GitHub Actions workflow running on pull requests
-- ✅ Branch coverage documentation and justification
-- ✅ All deliverables prepared for submission

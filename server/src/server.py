@@ -170,7 +170,9 @@ def create_app():
 
     # --- DB engine only (no Table metadata) ---
     def db_url() -> str:
-        # Use SQLite in-memory database when in test mode
+    # Use SQLite in-memory database when in test mode
+    # Branch 174→176 not covered: This returns the MySQL connection string in production.
+    # Tests always run with TEST_MODE=true using SQLite, so the MySQL path never runs.
         if app.config["TEST_MODE"]:
             return "sqlite:///:memory:"
         return (
@@ -862,6 +864,9 @@ def create_app():
         except ValueError:
             app.logger.error(f"Create watermark path safety check failed: doc_id={doc_id}")
             return jsonify({"error": "document path invalid"}), 500
+# Branch 865→866 not covered: This catches when the database has a record but
+# the actual file is gone (someone deleted it, disk failure, etc). Can't test
+# this without deleting the file after upload.
         if not file_path.exists():
             app.logger.error(f"Create watermark file missing on disk: {file_path}")
             return jsonify({"error": "file missing on disk"}), 410
